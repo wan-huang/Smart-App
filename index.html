@@ -3,22 +3,112 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SMART Patient App</title>
+  <title>My record | SMART Patient App</title>
+  <script src="https://cdn.jsdelivr.net/npm/fhirclient@3.0.1/bundle/fhir-client.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 40rem; line-height: 1.4; }
+    dt { margin-top: 0.8rem; font-weight: 600; }
+    dd { margin: 0.15rem 0 0; }
+    .error { color: #8a1f1f; }
+  </style>
 </head>
 <body>
   <main>
-    <h1>SMART Patient App</h1>
-    <p>Static teaching scaffold. SMART authorization is pending implementation.</p>
-    <ul>
-      <li><a href="./health.html">Health check</a></li>
-      <li><a href="./launch.html">Launch stub</a></li>
-    </ul>
-    <!--
-      Future OAuth redirect target. After loading the SMART client library,
-      resume authorization and obtain the authorized client:
-      FHIR.oauth2.ready().then(showApp).catch(showAuthorizationError);
-      Implement both handlers before enabling this callback.
-    -->
+    <h1>My record</h1>
+
+    <section id="signed-out">
+      <p>Sign in as the patient to see your record from the SMART sandbox.</p>
+      <ul>
+        <li><a href="./launch.html">Sign in</a></li>
+        <li><a href="./health.html">Health check</a></li>
+      </ul>
+    </section>
+
+    <section id="record" hidden>
+      <dl>
+        <dt>Name</dt>
+        <dd id="name"></dd>
+        <dt>Gender</dt>
+        <dd id="gender"></dd>
+        <dt>Birth date</dt>
+        <dd id="birth-date"></dd>
+        <dt>Age</dt>
+        <dd id="age"></dd>
+      </dl>
+      <p><a href="./" id="sign-out">Sign out</a></p>
+    </section>
+
+    <p id="error" class="error" hidden></p>
   </main>
+  <script>
+    var params = new URLSearchParams(location.search);
+    var cameBackFromAuth = params.has("code") || params.has("error") || params.has("state");
+
+    // ready() finishes the redirect: it trades the code for a token and
+    // restores that session on later visits. It rejects when nobody is signed in.
+    FHIR.oauth2.ready()
+      .then(function (client) {
+        return client.patient.read();
+      })
+      .then(showPatient)
+      .catch(function (error) {
+        if (cameBackFromAuth) {
+          showError(error);
+        }
+      });
+
+    document.getElementById("sign-out").addEventListener("click", function (event) {
+      event.preventDefault();
+      sessionStorage.clear();
+      location.href = "./";
+    });
+
+    function showPatient(patient) {
+      document.getElementById("signed-out").hidden = true;
+      document.getElementById("record").hidden = false;
+      document.getElementById("name").textContent = formatName(patient);
+      document.getElementById("gender").textContent = patient.gender || "Not recorded";
+      document.getElementById("birth-date").textContent = patient.birthDate || "Not recorded";
+      document.getElementById("age").textContent = formatAge(patient.birthDate);
+    }
+
+    function showError(error) {
+      var node = document.getElementById("error");
+      node.hidden = false;
+      node.textContent = error && error.message ? error.message : String(error);
+    }
+
+    // FHIR Patient.name is a list. Prefer the official name, then the first one.
+    // given and family are optional, so don't read them without checking.
+    function formatName(patient) {
+      var names = Array.isArray(patient.name) ? patient.name : [];
+      var name = names.filter(function (item) { return item.use === "official"; })[0] || names[0];
+      if (!name) {
+        return "Name not recorded";
+      }
+      if (name.text) {
+        return name.text;
+      }
+      var given = Array.isArray(name.given) ? name.given.join(" ") : "";
+      var family = name.family || "";
+      return (given + " " + family).trim() || "Name not recorded";
+    }
+
+    function formatAge(birthDate) {
+      if (!birthDate) {
+        return "Not recorded";
+      }
+      var parts = birthDate.split("-");
+      var year = Number(parts[0]);
+      var month = Number(parts[1] || 1) - 1;
+      var day = Number(parts[2] || 1);
+      var today = new Date();
+      var age = today.getFullYear() - year;
+      if (today.getMonth() < month || (today.getMonth() === month && today.getDate() < day)) {
+        age -= 1;
+      }
+      return age + " years";
+    }
+  </script>
 </body>
 </html>

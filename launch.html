@@ -3,25 +3,47 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Launch | SMART Patient App</title>
+  <title>Sign in | SMART Patient App</title>
+  <script src="https://cdn.jsdelivr.net/npm/fhirclient@3.0.1/bundle/fhir-client.js"></script>
 </head>
 <body>
   <main>
-    <h1>Launch Stub</h1>
-    <p>This page marks the entry point for future SMART authorization.</p>
-    <p><a href="./">Back to the app</a></p>
-    <!--
-      After loading the SMART client library and registering a public client,
-      start authorization with the settings for the selected launch mode:
-      FHIR.oauth2.authorize({
-        clientId: "REGISTERED_PUBLIC_CLIENT_ID",
-        redirectUri: new URL("./", location.href).href,
-        scope: "launch/patient"
-      });
-      Standalone: configure the FHIR server and request patient context.
-      EHR launch: use the incoming iss and launch parameters and the launch scope.
-      Add the specific resource permissions required by the eventual app.
-    -->
+    <h1>Starting patient sign-in…</h1>
+    <p>You are leaving this page for the SMART sandbox. Sign in there as the patient, then the sandbox sends you back here.</p>
+    <p id="error"></p>
   </main>
+  <script>
+    // Patient standalone against the SMART Health IT R4 sandbox.
+    // The sandbox reads the "/sim/..." segment and shows a patient login
+    // because the launch type is patient-standalone (the 3 below).
+    // A different iss on the query string wins, so the SMART Launcher can
+    // still start this same page.
+    var launchOptions = [
+      3, "", "", "AUTO",
+      0, 0, 0,
+      "", "", "", "", "", "", "",
+      0, 1, ""
+    ];
+
+    var sandboxIss = "https://launch.smarthealthit.org/v/r4/sim/"
+      + btoa(JSON.stringify(launchOptions)).replace(/=+$/g, "").replace(/\+/g, "-").replace(/\//g, "_")
+      + "/fhir";
+
+    // authorize() redirects the browser. Code after it does not run
+    // unless the sandbox cannot be reached.
+    FHIR.oauth2.authorize({
+      // Public client. The sandbox does not require a registered secret.
+      clientId: "my_web_app",
+      // launch/patient asks the sandbox to pick the patient during sign-in.
+      scope: "launch/patient openid fhirUser patient/Patient.read",
+      // Must be this app's index.html. fhir-client turns the relative URL
+      // into the full GitHub Pages URL before sending it.
+      redirectUri: "index.html",
+      iss: sandboxIss
+    }).catch(function (error) {
+      document.querySelector("h1").textContent = "Could not start sign-in";
+      document.getElementById("error").textContent = error.message || String(error);
+    });
+  </script>
 </body>
 </html>
